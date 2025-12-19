@@ -92,18 +92,19 @@ ul li {
   box-shadow: 0 0 12px rgba(255,0,0,0.8);
 }
 
+/* Projects container */
 .projects {
-  max-width: 900px;      
-  margin: 50px auto;      
+  max-width: 900px;       /* Limits the width */
+  margin: 50px auto;      /* Centers horizontally and adds top/bottom spacing */
   display: flex;
   flex-direction: column;
-  gap: 25px;             
+  gap: 25px;              /* Space between cards */
 }
 
-
+/* Individual project cards */
 .project-card {
-  background-color: rgba(255, 255, 255, 0.05); 
-  border-left: 4px solid #ff0000;           
+  background-color: rgba(255, 255, 255, 0.05); /* Slight transparent box for separation */
+  border-left: 4px solid #ff0000;            /* Left red line */
   padding: 20px 25px;
   border-radius: 10px;
   transition: transform 0.3s, box-shadow 0.3s;
@@ -180,9 +181,9 @@ a:hover {
 
 .certificates-container {
   display: flex;
-  gap: 30px;           
+  gap: 30px;           /* space between certificates */
   justify-content: center;
-  flex-wrap: wrap;     
+  flex-wrap: wrap;     /* mobile friendly */
 }
 
 .certificate-box {
