@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<!-- saved from url=(0037)file:///C:/Users/Evelyn/Binotify.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Binotify</title>
+
+<script>
+/* ===== STATE ===== */
+let darkMode = false;
+let currentBinId = null;
+let binToRenameId = null;
+
+// Predefined bins
+let predefinedBins = [
+  { id: 1, level: 20, location: 'Area 1', lastCleaned: 'Never', code: 'BIN001' },
+  { id: 2, level: 100, location: 'Area 2', lastCleaned: '2025-02-01 10:30', code: 'BIN002' },
+  { id: 3, level: 60, location: 'Area 3', lastCleaned: '2025-02-03 14:10', code: 'BIN003' },
+  { id: 4, level: 85, location: 'Area 4', lastCleaned: 'Never', code: 'BIN004' },
+  { id: 5, level: 0, location: 'Area 5', lastCleaned: 'Never', code: 'BIN005' },
+  { id: 6, level: 0, location: 'Area 6', lastCleaned: 'Never', code: 'BIN006' },
+  { id: 7, level: 0, location: 'Area 7', lastCleaned: 'Never', code: 'BIN007' },
+  { id: 8, level: 0, location: 'Area 8', lastCleaned: 'Never', code: 'BIN008' },
+  { id: 9, level: 0, location: 'Area 9', lastCleaned: 'Never', code: 'BIN009' },
+  { id: 10, level: 0, location: 'Area 10', lastCleaned: 'Never', code: 'BIN010' },
+];
+
+// Added bins
+let bins = [];
+
+/* ===== NAV ===== */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    if (s.id === id) {
+      s.classList.add('active');
+      s.style.display = 'flex';
+    } else {
+      s.classList.remove('active');
+      s.style.display = 'none';
+    }
+  });
+}
+
+/* ===== HOME / BINS ===== */
+function renderBins() {
+  const list = document.getElementById('binList');
+  list.innerHTML = '';
+
+  bins.forEach(bin => {
+    let status = 'Not Full';
+    let color = 'green';
+    if (bin.level >= 60 && bin.level < 85) { status = 'Half Full'; color = 'yellow'; }
+    if (bin.level >= 85 && bin.level < 100) { status = 'Almost Full'; color = 'orange'; }
+    if (bin.level === 100) { status = 'FULL'; color = 'red'; }
+
+    list.innerHTML += `
+      <div class="bin ${color}" onclick="openBin(${bin.id})">
+        ${bin.name || 'Bin ' + bin.id} (${bin.code})
+        <span style="float:right;font-size:12px;">${bin.level}%</span><br>
+        <small>Status: ${status}</small>
+        <button class="mini" onclick="event.stopPropagation(); renameBin(${bin.id})">✎ Rename</button>
+        <button class="mini danger" onclick="event.stopPropagation(); removeBin(${bin.id})">✖ Remove</button>
+      </div>`;
+  });
+}
+
+function removeBin(id) {
+  bins = bins.filter(b => b.id !== id);
+  renderBins();
+}
+
+function openBin(id) {
+  currentBinId = id;
+  const bin = bins.find(b => b.id === id);
+
+  let status = 'Not Full';
+  if (bin.level >= 60 && bin.level < 85) status = 'Half Full';
+  if (bin.level >= 85 && bin.level < 100) status = 'Almost Full';
+  if (bin.level === 100) status = 'FULL';
+
+  document.getElementById('binTitle').innerText = bin.name || `Bin ${id}`;
+  document.getElementById('binStatus').innerText = status;
+  document.getElementById('binLocation').innerText = bin.location;
+  document.getElementById('lastCleaned').innerText = bin.lastCleaned;
+
+  updateProgress(bin);
+
+  const badge = document.getElementById('statusBadge');
+  badge.className = 'status-badge ' + 
+    (status === 'FULL' ? 'badge-red' : 
+     status === 'Almost Full' ? 'badge-orange' :
+     status === 'Half Full' ? 'badge-yellow' : 'badge-green');
+  badge.innerText = status;
+
+  const warningEl = document.getElementById('warning');
+  if (status === 'FULL') {
+    warningEl.innerText = '⚠ BIN IS FULL – CLEAN NOW';
+    warningEl.className = 'warning show full';
+  } else if (status === 'Almost Full') {
+    warningEl.innerText = '⚠ BIN ALMOST FULL';
+    warningEl.className = 'warning show almost';
+  } else {
+    warningEl.className = 'warning';
+  }
+
+  renderHistory(id);
+  showScreen('details');
+}
+
+function updateProgress(bin) {
+  const progressCircle = document.getElementById('progressCircle');
+  const fillText = document.getElementById('fillText');
+  const radius = 50;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (circumference * bin.level / 100);
+  progressCircle.style.strokeDasharray = circumference;
+  progressCircle.style.strokeDashoffset = offset;
+  fillText.innerText = bin.level + '%';
+
+  let color = '#4caf50';
+  if(bin.level >= 60 && bin.level < 85) color = '#fbc02d';
+  if(bin.level >= 85 && bin.level < 100) color = '#ff9800';
+  if(bin.level === 100) color = '#e53935';
+  progressCircle.style.stroke = color;
+}
+
+function cleanBin() {
+  const bin = bins.find(b => b.id === currentBinId);
+  bin.level = 0;
+  bin.lastCleaned = new Date().toLocaleString();
+  renderBins();
+  if(currentBinId) openBin(currentBinId);
+}
+
+function renderHistory(id) {
+  const bin = bins.find(b => b.id === id);
+  document.getElementById('historyLog').innerHTML = `<li>Last cleaned: ${bin.lastCleaned}</li>`;
+}
+
+/* ===== ADD / RENAME MODALS ===== */
+function showAddBinInput() { document.getElementById('addBinModal').style.display = 'flex'; }
+function hideAddBinInput() { document.getElementById('addBinModal').style.display = 'none'; }
+function addBinFromInput() {
+  const input = document.getElementById('binCodeInput');
+  const code = input.value.trim().toUpperCase();
+  const error = document.getElementById('binError');
+  error.style.display = 'none';
+  error.innerText = '';
+
+  if (!code) { error.style.display='block'; error.innerText="Please enter a bin code!"; return; }
+  const foundBin = predefinedBins.find(b => b.code === code);
+  if(!foundBin){ error.style.display='block'; error.innerText="Invalid code! Bin doesn't exist."; return; }
+  if(bins.find(b => b.id === foundBin.id)){ error.style.display='block'; error.innerText="This bin is already added!"; return; }
+
+  hideAddBinInput();
+  showScreen('loading');
+  setTimeout(() => {
+    bins.push({...foundBin});
+    renderBins();
+    input.value = "";
+    error.style.display='none';
+    showScreen('bins');
+  }, 1500);
+}
+
+function renameBin(id) {
+  binToRenameId = id;
+  const bin = bins.find(b => b.id === id);
+  document.getElementById('renameBinInput').value = bin.name || `Bin ${bin.id}`;
+  document.getElementById('renameBinModal').style.display = 'flex';
+}
+function hideRenameModal() { document.getElementById('renameBinModal').style.display = 'none'; }
+function saveBinRename() {
+  const newName = document.getElementById('renameBinInput').value.trim();
+  if(newName !== '' && binToRenameId !== null) {
+    const bin = bins.find(b => b.id === binToRenameId);
+    bin.name = newName;
+    renderBins();
+    if(currentBinId === binToRenameId) openBin(binToRenameId);
+  }
+  hideRenameModal();
+}
+
+/* ===== SETTINGS ===== */
+function toggleDarkMode() {
+  darkMode = !darkMode;
+  document.body.classList.toggle('dark', darkMode);
+}
+
+/* ===== AUTO-FILL ===== */
+function startAutoFill() {
+  setInterval(() => {
+    bins.forEach(bin => {
+      if (bin.level < 100) bin.level += 1;
+      if (bin.level > 100) bin.level = 100;
+    });
+    renderBins();
+    if(currentBinId) updateProgress(bins.find(b => b.id === currentBinId));
+  }, 5000);
+}
+
+/* ===== INIT ===== */
+window.onload = () => {
+  bins.push({...predefinedBins[0]});
+  bins.push({...predefinedBins[2]});
+  bins.push({...predefinedBins[1]});
+  renderBins();
+  startAutoFill();
+};
+</script>
+
+<style>
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f0f0f0; color:#111; }
+body.dark{background:#121212;color:#fff;}
+.screen { display:none; width:100%; min-height:100vh; padding:20px; box-sizing:border-box; flex-direction: column; }
+.screen.active { display:flex; }
+button{ width:100%; padding:12px; border-radius:10px; border:none; font-size:16px; font-weight:600; background:#4caf50; color:#fff; margin-top:10px; }
+button.secondary{background:#aaa;color:#222;}
+button.mini{width:auto;padding:4px 8px;font-size:12px;margin-top:6px;}
+button.danger{background:#e53935;}
+
+/* BIN COLORS */
+.bin{border-radius:12px;padding:12px;margin:10px 0;color:#fff;font-weight:600;position:relative;cursor:pointer;}
+.green{background:#4caf50;}
+.yellow{background:#fbc02d;color:#222;}
+.orange{background:#ff9800;color:#222;}
+.red{background:#e53935;}
+
+/* STATUS BADGE */
+.status-badge{padding:6px 14px;border-radius:999px;font-weight:600;display:inline-block;margin-bottom:10px;}
+.badge-green{background:#e8f5e9;color:#2e7d32;}
+.badge-yellow{background:#fff8e1;color:#f57f17;}
+.badge-orange{background:#fff3e0;color:#ef6c00;}
+.badge-red{background:#ffebee;color:#c62828;}
+
+/* PROGRESS */
+.progress{display:flex;justify-content:center;margin:14px 0;position:relative;}
+svg{transform:rotate(-90deg);}
+circle{fill:none;stroke-width:10;}
+.bg{stroke:#ddd;}
+.fg{stroke:#4caf50;transition:.4s;}
+.progress-text{position:absolute;top:50%;transform:translateY(-50%);font-weight:700;}
+
+/* WARNING */
+.warning{color:#fff;padding:10px;border-radius:12px;display:none;animation:pulse 1s infinite;}
+.warning.show.full{background:#e53935;}
+.warning.show.almost{background:#ff9800;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+
+/* MAP / ICONS */
+.map,.bin-img{height:90px;border-radius:14px;margin:10px 0;display:flex;align-items:center;justify-content:center;font-weight:600;}
+.map{background:linear-gradient(135deg,#81c784,#aed581);}
+.bin-img{background:#c8e6c9;font-size:36px;}
+
+/* HISTORY */
+ul{padding-left:18px;}
+
+/* START SCREEN DESIGN */
+#start{position:relative;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#4caf50,#81c784);color:#fff;min-height:100vh;}
+.start-bg{position:absolute;top:0;left:0;right:0;bottom:0;opacity:0.8;z-index:0;}
+.start-content{position:relative;z-index:1;}
+#start h1{font-size:48px;margin-bottom:10px;text-shadow:2px 2px 6px rgba(0,0,0,0.3);}
+#start p{font-size:18px;margin-bottom:20px;text-shadow:1px 1px 4px rgba(0,0,0,0.3);}
+
+/* ADD BIN MODAL */
+#addBinModal,#renameBinModal { display:none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:100; }
+#addBinModalContent { background:#e2e2e2; padding:30px 40px; border-radius:20px; color:#000; text-align:center; min-width:300px; }
+#addBinModalContent input,#renameBinModal input { padding:12px; width:80%; border-radius:10px; border:none; margin-top:10px; font-size:16px; }
+#addBinModalContent button,#renameBinModal button { margin:10px 5px 0 5px; padding:10px 20px; border-radius:10px; border:none; font-weight:600; cursor:pointer; }
+#addBinModalContent button.secondary,#renameBinModal button.secondary { background:#fff; color:#4caf50; }
+#binError { margin-top:5px; color:#d1001f; font-weight:600; display:none; }
+
+/* ADD BIN BUTTON UPPER RIGHT */
+#bins { position: relative; padding-top: 60px; }
+#addBinBtn { position: absolute; top:20px; right:20px; width:auto; padding:10px 18px; font-size:16px; border-radius:12px; }
+</style>
+</head>
+<body>
+
+<!-- START SCREEN -->
+<div id="start" class="screen" style="display: none;">
+  <div class="start-bg"></div>
+  <div class="start-content">
+    <h1>Binotify</h1>
+    <p>Smart waste management at your fingertips</p>
+    <button onclick="showScreen(&#39;bins&#39;)">Check Bins</button>
+    <button class="secondary" onclick="showScreen(&#39;settings&#39;)">Settings</button>
+  </div>
+</div>
+
+<!-- BINS SCREEN -->
+<div id="bins" class="screen active" style="display: flex;">
+  <h2>Your Bins</h2>
+  <button id="addBinBtn" onclick="showAddBinInput()">➕ Add Bin</button>
+  <div id="binList">
+      <div class="bin green" onclick="openBin(1)">
+        Bin 1 (BIN001)
+        <span style="float:right;font-size:12px;">5%</span><br>
+        <small>Status: Not Full</small>
+        <button class="mini" onclick="event.stopPropagation(); renameBin(1)">✎ Rename</button>
+        <button class="mini danger" onclick="event.stopPropagation(); removeBin(1)">✖ Remove</button>
+      </div>
+      <div class="bin green" onclick="openBin(3)">
+        Bin 3 (BIN003)
+        <span style="float:right;font-size:12px;">5%</span><br>
+        <small>Status: Not Full</small>
+        <button class="mini" onclick="event.stopPropagation(); renameBin(3)">✎ Rename</button>
+        <button class="mini danger" onclick="event.stopPropagation(); removeBin(3)">✖ Remove</button>
+      </div>
+      <div class="bin green" onclick="openBin(2)">
+        Bin 2 (BIN002)
+        <span style="float:right;font-size:12px;">12%</span><br>
+        <small>Status: Not Full</small>
+        <button class="mini" onclick="event.stopPropagation(); renameBin(2)">✎ Rename</button>
+        <button class="mini danger" onclick="event.stopPropagation(); removeBin(2)">✖ Remove</button>
+      </div>
+      <div class="bin green" onclick="openBin(4)">
+        Canteen (BIN004)
+        <span style="float:right;font-size:12px;">7%</span><br>
+        <small>Status: Not Full</small>
+        <button class="mini" onclick="event.stopPropagation(); renameBin(4)">✎ Rename</button>
+        <button class="mini danger" onclick="event.stopPropagation(); removeBin(4)">✖ Remove</button>
+      </div></div>
+
+  <!-- ADD BIN MODAL -->
+  <div id="addBinModal" style="display: none;">
+    <div id="addBinModalContent">
+      <h3>Add New Bin</h3>
+      <input id="binCodeInput" type="text" placeholder="Enter bin code (BIN001–BIN010)">
+      <p id="binError" style="display: none;"></p>
+      <div style="margin-top:10px;">
+        <button onclick="addBinFromInput()">Add</button>
+        <button class="secondary" onclick="hideAddBinInput()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RENAME BIN MODAL -->
+  <div id="renameBinModal" style="display: none;">
+    <div style="background:#e2e2e2; padding:30px 40px; border-radius:20px; text-align:center; min-width:300px; color:#000;">
+      <h3>Rename Bin</h3>
+      <input id="renameBinInput" type="text" placeholder="Enter new bin name">
+      <div style="margin-top:10px;">
+        <button onclick="saveBinRename()">Save</button>
+        <button class="secondary" onclick="hideRenameModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <button class="secondary" onclick="showScreen(&#39;start&#39;)" style="margin-top:20px;">Back</button>
+</div>
+
+<!-- LOADING SCREEN -->
+<div id="loading" class="screen" style="display: none;">
+  <h2>Connecting to Smart Bin…</h2>
+  <p>Please wait</p>
+</div>
+
+<!-- DETAILS SCREEN -->
+<div id="details" class="screen" style="display: none;">
+  <h2 id="binTitle">Bin 3</h2>
+  <div id="statusBadge" class="status-badge badge-green">Not Full</div>
+  <div class="bin-img">🗑️</div>
+  <div class="progress">
+    <svg width="120" height="120">
+      <circle class="bg" cx="60" cy="60" r="50"></circle>
+      <circle id="progressCircle" class="fg" cx="60" cy="60" r="50" style="stroke-dasharray: 314.159; stroke-dashoffset: 298.451; stroke: rgb(76, 175, 80);"></circle>
+    </svg>
+    <div id="fillText" class="progress-text">5%</div>
+  </div>
+  <div id="warning" class="warning">⚠ BIN IS FULL – CLEAN NOW</div>
+  <p>Status: <span id="binStatus">Not Full</span></p>
+  <p>Location: <span id="binLocation">Area 3</span></p>
+  <p>Last cleaned: <span id="lastCleaned">12/18/2025, 3:52:02 PM</span></p>
+  <div class="map">📍 Map Preview</div>
+  <h4>History</h4>
+  <ul id="historyLog"><li>Last cleaned: 12/18/2025, 3:52:02 PM</li></ul>
+  <button onclick="cleanBin()">Mark as Clean</button>
+  <button class="secondary" onclick="showScreen(&#39;bins&#39;)">Back</button>
+</div>
+
+<!-- SETTINGS SCREEN -->
+<div id="settings" class="screen" style="display: none;">
+  <h2>Settings</h2>
+  <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+  <button class="secondary" onclick="showScreen(&#39;start&#39;)">Back</button>
+</div>
+
+
+
+</body></html>
